@@ -5,8 +5,8 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Token bot Telegram kamu
-const TELEGRAM_TOKEN = "123456789:ABCDEF_your_real_token";
-const CHAT_ID = "123456789"; // ganti dengan ID Telegram kamu
+const TELEGRAM_TOKEN = "8175344760:AAFvyssP6vnamA5lqhwGSxsGzhmPuvNRzoM";
+const CHAT_ID = "1712293814"; // ganti dengan ID Telegram kamu
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
