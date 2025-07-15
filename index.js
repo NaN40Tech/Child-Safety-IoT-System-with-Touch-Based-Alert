@@ -21,12 +21,9 @@ app.get('/send', async (req, res) => {
     });
     res.send('ok');
   } catch (error) {
-    console.error(error.response?.data || error.message);
     res.status(500).send('Failed to send message to Telegram');
   }
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
