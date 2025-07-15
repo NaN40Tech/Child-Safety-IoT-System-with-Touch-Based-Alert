@@ -1,36 +1,35 @@
-const express = require('express');
-const axios = require('axios');
+const express = require("express");
+const axios = require("axios");
+
 const app = express();
+const PORT = process.env.PORT || 8080;
 
-const CHAT_ID = '1712293814';
-const BOT_TOKEN = '8175344760:AAFvyssP6vnamA5lqhwGSxsGzhmPuvNRzoM';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-app.get('/send', async (req, res) => {
+app.get("/send", async (req, res) => {
   const { bpm, lat, lon } = req.query;
 
   if (!bpm || !lat || !lon) {
-    return res.status(400).send('Missing parameters');
+    return res.status(400).send("Missing parameters");
   }
 
-  const text = `🚨 *ALERT!*\nBPM: ${bpm}\nLokasi: https://maps.google.com/?q=${lat},${lon}`;
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+  const message = `🚨 *ALERT!*\nBPM: ${bpm}\nLokasi: https://maps.google.com/?q=${lat},${lon}`;
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
   try {
-    const response = await axios.get(url, {
-      params: {
-        chat_id: CHAT_ID,
-        text: text,
-        parse_mode: 'Markdown'
-      }
+    await axios.post(url, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: message,
+      parse_mode: "Markdown"
     });
-
-    res.status(200).send('Pesan terkirim ke Telegram');
+    res.send("Pesan berhasil dikirim ke Telegram!");
   } catch (err) {
-    res.status(500).send('Gagal kirim ke Telegram');
+    console.error(err.response?.data || err.message);
+    res.status(500).send("Gagal mengirim pesan.");
   }
 });
 
-const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server berjalan di port ${PORT}`);
 });
