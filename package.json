@@ -1,13 +1,13 @@
 {
-  "name": "child-safety-iot-system",
+  "name": "esp32-server",
   "version": "1.0.0",
-  "description": "Child Safety IoT System with Touch-Based Alert",
-  "main": "index.js",
+  "description": "Server untuk ESP32 + SIM800L kirim ke Telegram",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "node-telegram-bot-api": "^0.61.0"
+    "axios": "^1.6.0",
+    "express": "^4.19.2"
   }
 }

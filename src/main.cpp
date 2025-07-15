@@ -1,54 +1,54 @@
 #include <HardwareSerial.h>
 
-HardwareSerial sim800(2); // Gunakan Serial2
-const int SIM_RX = 16; // sesuaikan pin kamu
-const int SIM_TX = 17; // sesuaikan pin kamu
+HardwareSerial sim800(2); // RX=16, TX=17
 
-String bpm = "85";
-String lat = "-2.917";
-String lon = "104.719";
-
-void sendCommand(String cmd, int delayMs = 1000) {
-  sim800.println(cmd);
-  delay(delayMs);
-  while (sim800.available()) {
-    Serial.write(sim800.read());
-  }
-}
+// Deklarasi fungsi di atas
+void sendCommand(String cmd);
 
 void setup() {
   Serial.begin(115200);
-  sim800.begin(115200, SERIAL_8N1, SIM_RX, SIM_TX);
+  sim800.begin(115200, SERIAL_8N1, 16, 17);
 
-  delay(3000);
-  Serial.println("Init...");
+  Serial.println("Inisialisasi SIM800L...");
+  delay(1000);
 
   sendCommand("AT");
   sendCommand("AT+CPIN?");
   sendCommand("AT+CSQ");
   sendCommand("AT+CREG?");
   sendCommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"");
-  sendCommand("AT+SAPBR=3,1,\"APN\",\"internet\""); // APN by.u/telkomsel
+  sendCommand("AT+SAPBR=3,1,\"APN\",\"internet\"");
   sendCommand("AT+SAPBR=1,1");
-  sendCommand("AT+SAPBR=2,1");
+  delay(3000);
 
-  // Kirim HTTP GET
+  sendCommand("AT+HTTPTERM");
   sendCommand("AT+HTTPINIT");
   sendCommand("AT+HTTPPARA=\"CID\",1");
 
-  String url = "http://child-safety-iot-system-with-touch-based-alert-production.up.railway.app/send?bpm=" + bpm + "&lat=" + lat + "&lon=" + lon;
+  // Ganti sesuai URL ngrok kamu
+  String url = "http://5b7109ce888c.ngrok-free.app/send?bpm=85&lat=-2.917&lon=104.719";
   sendCommand("AT+HTTPPARA=\"URL\",\"" + url + "\"");
 
   sendCommand("AT+HTTPACTION=0");
-  delay(5000); // tunggu request
+  delay(5000); // tunggu HTTP response
+
   sendCommand("AT+HTTPREAD");
   sendCommand("AT+HTTPTERM");
+  sendCommand("AT+SAPBR=0,1");
 
-  sendCommand("AT+SAPBR=0,1"); // tutup GPRS
-
-  Serial.println("Done.");
+  Serial.println("Selesai mengirim pesan.");
 }
 
 void loop() {
-  // Kosong, kirim hanya sekali
+  // tidak ada loop
+}
+
+// Fungsi dipindah ke bawah
+void sendCommand(String cmd) {
+  sim800.println(cmd);
+  delay(1000);
+
+  while (sim800.available()) {
+    Serial.write(sim800.read());
+  }
 }
