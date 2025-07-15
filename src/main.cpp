@@ -1,22 +1,16 @@
-#include <Arduino.h>
 #include <HardwareSerial.h>
 
-HardwareSerial sim800(1); // UART1 untuk SIM800L
+HardwareSerial sim800(2); // Gunakan Serial2
+const int SIM_RX = 16; // sesuaikan pin kamu
+const int SIM_TX = 17; // sesuaikan pin kamu
 
-#define MODEM_RX 16
-#define MODEM_TX 17
+String bpm = "85";
+String lat = "-2.917";
+String lon = "104.719";
 
-// URL dan IP Webhook (ganti jika perlu)
-const String webhookPath = "/0bcc8843-1ca4-458b-baf7-585d5405f6a8";  // dari webhook.site
-const String webhookHost = "webhook.site";
-const String webhookIP   = "178.63.67.153";  // IPv4 yang cocok untuk SIM800L
-
-const String message = "Halo dari ESP32 + SIM800L";
-
-// Fungsi kirim AT Command
-void sendAT(String cmd, int wait = 1000) {
+void sendCommand(String cmd, int delayMs = 1000) {
   sim800.println(cmd);
-  delay(wait);
+  delay(delayMs);
   while (sim800.available()) {
     Serial.write(sim800.read());
   }
@@ -24,37 +18,37 @@ void sendAT(String cmd, int wait = 1000) {
 
 void setup() {
   Serial.begin(115200);
-  sim800.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
+  sim800.begin(115200, SERIAL_8N1, SIM_RX, SIM_TX);
+
   delay(3000);
+  Serial.println("Init...");
 
-  Serial.println("Inisialisasi SIM800L...");
+  sendCommand("AT");
+  sendCommand("AT+CPIN?");
+  sendCommand("AT+CSQ");
+  sendCommand("AT+CREG?");
+  sendCommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"");
+  sendCommand("AT+SAPBR=3,1,\"APN\",\"internet\""); // APN by.u/telkomsel
+  sendCommand("AT+SAPBR=1,1");
+  sendCommand("AT+SAPBR=2,1");
 
-  // Langkah awal koneksi GPRS
-  sendAT("AT");
-  sendAT("AT+CSQ");  // Cek sinyal
-  sendAT("AT+CGATT?"); // Cek status attach
-  sendAT("AT+SAPBR=3,1,\"Contype\",\"GPRS\"");
-  sendAT("AT+SAPBR=3,1,\"APN\",\"internet\""); // APN default Telkomsel/By.U
-  sendAT("AT+SAPBR=1,1", 3000); // Mulai koneksi GPRS
-  sendAT("AT+SAPBR=2,1");       // Cek IP
+  // Kirim HTTP GET
+  sendCommand("AT+HTTPINIT");
+  sendCommand("AT+HTTPPARA=\"CID\",1");
 
-  Serial.println("Mengirim pesan ke webhook...");
+  String url = "http://child-safety-iot-system-with-touch-based-alert-production.up.railway.app/send?bpm=" + bpm + "&lat=" + lat + "&lon=" + lon;
+  sendCommand("AT+HTTPPARA=\"URL\",\"" + url + "\"");
 
-  // Siapkan dan kirim HTTP GET ke webhook
-  sendAT("AT+HTTPTERM"); // Terminate sesi sebelumnya (jika ada)
-  sendAT("AT+HTTPINIT");
-  sendAT("AT+HTTPPARA=\"CID\",1");
+  sendCommand("AT+HTTPACTION=0");
+  delay(5000); // tunggu request
+  sendCommand("AT+HTTPREAD");
+  sendCommand("AT+HTTPTERM");
 
-  // Buat URL lengkap (gunakan IP, bukan domain langsung)
-  String fullUrl = "http://" + webhookIP + webhookPath + "?msg=" + message;
+  sendCommand("AT+SAPBR=0,1"); // tutup GPRS
 
-  sendAT("AT+HTTPPARA=\"URL\",\"" + fullUrl + "\"");
-  sendAT("AT+HTTPPARA=\"HOST\",\"" + webhookHost + "\""); // Penting agar HOST dikenali oleh server
-  sendAT("AT+HTTPPARA=\"UA\",\"ESP32SIM800\""); // Opsional user-agent
-  sendAT("AT+HTTPACTION=0", 8000); // GET request
-  sendAT("AT+HTTPREAD", 2000);     // Baca respons
+  Serial.println("Done.");
 }
 
 void loop() {
-  // Tidak melakukan apa-apa di loop
+  // Kosong, kirim hanya sekali
 }
