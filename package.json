@@ -1,13 +1,13 @@
 {
-  "name": "esp32-server",
+  "name": "telegram-esp32-server",
   "version": "1.0.0",
-  "description": "Server untuk ESP32 + SIM800L kirim ke Telegram",
+  "description": "Server untuk menerima data dari ESP32 dan mengirim ke Telegram",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.6.8",
     "express": "^4.19.2"
   }
 }
