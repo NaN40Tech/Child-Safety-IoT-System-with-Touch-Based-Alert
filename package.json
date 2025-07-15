@@ -1,13 +1,13 @@
 {
-  "name": "child-safety-iot",
+  "name": "child-tracker",
   "version": "1.0.0",
-  "description": "Child safety alert system using GSM and Telegram",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "axios": "^1.6.7",
-    "express": "^4.18.2"
-  }
+  "axios": "^1.6.7",
+  "express": "^4.18.2"
+}
+
 }
