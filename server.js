@@ -1,35 +1,35 @@
 const express = require("express");
-const axios = require("axios");
+const TelegramBot = require("node-telegram-bot-api");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// Token bot Telegram & chat ID
+const TELEGRAM_TOKEN = "8175344760:AAFvyssP6vnamA5lqhwGSxsGzhmPuvNRzoM";
+const CHAT_ID = "1712293814";
 
-app.get("/send", async (req, res) => {
+const bot = new TelegramBot(TELEGRAM_TOKEN);
+
+// Endpoint root
+app.get("/", (req, res) => {
+  res.send("Server IoT aktif!");
+});
+
+// Endpoint HTTP untuk SIM800L
+app.get("/iot", (req, res) => {
   const { bpm, lat, lon } = req.query;
 
   if (!bpm || !lat || !lon) {
     return res.status(400).send("Missing parameters");
   }
 
-  const message = `🚨 *ALERT!*\nBPM: ${bpm}\nLokasi: https://maps.google.com/?q=${lat},${lon}`;
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const message = `‼️ *ALERT*\nBPM: ${bpm}\nLokasi: https://maps.google.com/?q=${lat},${lon}`;
+  bot.sendMessage(CHAT_ID, message, { parse_mode: "Markdown" });
 
-  try {
-    await axios.post(url, {
-      chat_id: TELEGRAM_CHAT_ID,
-      text: message,
-      parse_mode: "Markdown"
-    });
-    res.send("Pesan berhasil dikirim ke Telegram!");
-  } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).send("Gagal mengirim pesan.");
-  }
+  console.log(`[IOT RECEIVED] BPM: ${bpm}, Lokasi: ${lat}, ${lon}`);
+  res.send("OK");
 });
 
 app.listen(PORT, () => {
-  console.log(`Server berjalan di port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
