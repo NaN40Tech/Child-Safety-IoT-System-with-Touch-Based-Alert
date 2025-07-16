@@ -1,95 +1,85 @@
 #include <Arduino.h>
-#include <HardwareSerial.h>
+#include "SIM800L.h"
 
-// Konfigurasi pin SIM800L EVB (gunakan UART2)
-HardwareSerial sim800(2);
-const int SIM_RX = 16;
-const int SIM_TX = 17;
+#define SIM800_RST_PIN 5  // Bisa diabaikan jika tidak digunakan
 
-// Data awal (simulasi)
-String bpm = "75";
-String lat = "-6.200000";
-String lon = "106.816666";
+SIM800L* sim800l;
+HardwareSerial sim800Serial(2); // UART2 di ESP32: RX=16, TX=17
 
-// Deklarasi fungsi sebelum digunakan
-void sendHTTPRequest();
-void sendATCommand(String command, int delayMs = 1000);
+// APN Telkomsel atau By.U
+const char APN[] = "internet";
+
+// GANTI INI DENGAN LINK HTTP DARI REPLIT KAMU (HARUS PAKAI http://, BUKAN https://)
+const char URL[] = "http://ee1e468f-e4af-41fa-a6c3-ed757d70d861-00-36vp7ciz3ewao.pike.replit.dev/iot?bpm=80&lat=-6.2&lon=106.8";
+
+void setupModule();
 
 void setup() {
   Serial.begin(115200);
-  sim800.begin(115200, SERIAL_8N1, SIM_RX, SIM_TX);
-  
-  delay(3000);
-  Serial.println("=== ESP32 + SIM800L EVB Test ===");
-  Serial.println("Testing Telegram message via HTTP...");
+  delay(1000);
+  Serial.println("=== ESP32 + SIM800L ===");
 
-  // Inisialisasi koneksi SIM800L
-  sendATCommand("AT", 2000);
-  sendATCommand("AT+CSQ", 1000);     // Cek sinyal
-  sendATCommand("AT+CPIN?", 1000);   // Cek status SIM
-  sendATCommand("AT+CREG?", 2000);   // Cek status jaringan
+  sim800Serial.begin(9600, SERIAL_8N1, 16, 17);  // RX=16, TX=17
 
-  // Setup GPRS
-  Serial.println("Setting up GPRS...");
-  sendATCommand("AT+SAPBR=3,1,\"Contype\",\"GPRS\"", 1000);
-  sendATCommand("AT+SAPBR=3,1,\"APN\",\"internet\"", 1000); // APN By.U/Telkomsel
-  sendATCommand("AT+SAPBR=1,1", 3000);  // Aktifkan GPRS
-  sendATCommand("AT+SAPBR=2,1", 2000);  // Tampilkan status GPRS
-
-  // Kirim data ke server Railway
-  sendHTTPRequest();
-
-  // Matikan GPRS setelah kirim
-  sendATCommand("AT+SAPBR=0,1", 1000);
-
-  Serial.println("=== Test Complete ===");
+  sim800l = new SIM800L((Stream *)&sim800Serial, SIM800_RST_PIN, 200, 512, &Serial);
+  setupModule();
 }
 
 void loop() {
-  delay(30000); // Kirim ulang setiap 30 detik
+  Serial.println("🔁 Connecting GPRS...");
 
-  Serial.println("Sending another test message...");
-
-  // Simulasikan data acak
-  bpm = String(random(65, 100));
-  lat = String(-6.2 + random(-50, 50) * 0.0001);   // Sekitar Jakarta
-  lon = String(106.8 + random(-50, 50) * 0.0001);  // Sekitar Jakarta
-
-  // Aktifkan GPRS ulang
-  sendATCommand("AT+SAPBR=1,1", 2000);
-
-  // Kirim data
-  sendHTTPRequest();
-
-  // Matikan GPRS
-  sendATCommand("AT+SAPBR=0,1", 1000);
-}
-
-void sendHTTPRequest() {
-  sendATCommand("AT+HTTPINIT", 2000);
-  sendATCommand("AT+HTTPPARA=\"CID\",1", 1000);
-
-  // ✅ GUNAKAN HTTP, BUKAN HTTPS!
-  String url = "http://child-safety-iot-system-with-touch-based-alert-production.up.railway.app/iot?bpm=" + bpm + "&lat=" + lat + "&lon=" + lon;
-
-  Serial.print("URL: ");
-  Serial.println(url);
-
-  sendATCommand("AT+HTTPPARA=\"URL\",\"" + url + "\"", 1000);
-  sendATCommand("AT+HTTPACTION=0", 10000);  // 0 = GET request
-  sendATCommand("AT+HTTPREAD", 3000);
-  sendATCommand("AT+HTTPTERM", 1000);
-}
-
-void sendATCommand(String command, int delayMs) {
-  Serial.print("Sending: ");
-  Serial.println(command);
-
-  sim800.println(command);
-  delay(delayMs);
-
-  while (sim800.available()) {
-    Serial.write(sim800.read());
+  bool connected = false;
+  for (uint8_t i = 0; i < 5 && !connected; i++) {
+    delay(1000);
+    connected = sim800l->connectGPRS();
   }
-  Serial.println();
+
+  if (!connected) {
+    Serial.println("❌ Gagal GPRS. Reset module...");
+    sim800l->reset();
+    setupModule();
+    return;
+  }
+
+  Serial.println("✅ GPRS Connected. IP: " + sim800l->getIP());
+
+  Serial.println("🌐 Kirim HTTP GET...");
+  uint16_t rc = sim800l->doGet(URL, 10000);
+  if (rc == 200) {
+    Serial.println("✅ Sukses kirim!");
+    Serial.println(sim800l->getDataReceived());
+  } else {
+    Serial.print("❌ Gagal kirim. Error: ");
+    Serial.println(rc);
+  }
+
+  sim800l->disconnectGPRS();
+  delay(60000);  // kirim tiap 1 menit
+}
+
+void setupModule() {
+  while (!sim800l->isReady()) {
+    Serial.println("Menunggu module siap...");
+    delay(1000);
+  }
+
+  while (sim800l->getSignal() <= 0) {
+    Serial.println("📶 Menunggu sinyal...");
+    delay(1000);
+  }
+
+  while (sim800l->getRegistrationStatus() != REGISTERED_HOME &&
+         sim800l->getRegistrationStatus() != REGISTERED_ROAMING) {
+    Serial.println("📡 Registrasi jaringan...");
+    delay(1000);
+  }
+
+  bool gprs = sim800l->setupGPRS(APN);
+  while (!gprs) {
+    Serial.println("❌ Gagal setup GPRS, coba lagi...");
+    delay(2000);
+    gprs = sim800l->setupGPRS(APN);
+  }
+
+  Serial.println("✅ GPRS Siap!");
 }
