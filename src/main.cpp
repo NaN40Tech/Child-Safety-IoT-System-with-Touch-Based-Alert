@@ -1,85 +1,92 @@
-#include <Arduino.h>
-#include "SIM800L.h"
+// ESP32 + SIM800L EVB V2
+// Kirim data ke Telegram via Replit menggunakan SIM800L HTTP connector
 
-#define SIM800_RST_PIN 5  // Bisa diabaikan jika tidak digunakan
+#include <Arduino.h>
+#include <SIM800L.h>  // Library: ostaquet/SIM800L HTTP connector
+
+// Konfigurasi pin SIM800L
+#define SIM800_TX 17
+#define SIM800_RX 16
+#define SIM800_RST 5     // RST disambungkan ke D5 (GPIO5)
+
+// Konfigurasi jaringan dan endpoint
+const char APN[] = "internet";  // APN untuk Telkomsel/By.U
+const char* HOST = "https://ee1e468f-e4af-41fa-a6c3-ed757d70d861-00-36vp7ciz3ewao.pike.replit.dev:3000";
+const char* PATH = "/iot";     // endpoint di server
 
 SIM800L* sim800l;
-HardwareSerial sim800Serial(2); // UART2 di ESP32: RX=16, TX=17
-
-// APN Telkomsel atau By.U
-const char APN[] = "internet";
-
-// GANTI INI DENGAN LINK HTTP DARI REPLIT KAMU (HARUS PAKAI http://, BUKAN https://)
-const char URL[] = "http://ee1e468f-e4af-41fa-a6c3-ed757d70d861-00-36vp7ciz3ewao.pike.replit.dev/iot?bpm=80&lat=-6.2&lon=106.8";
-
-void setupModule();
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  Serial.println("=== ESP32 + SIM800L ===");
+  delay(2000);
+  Serial.println("=== ESP32 + SIM800L EVB (dengan RST di D5) ===");
 
-  sim800Serial.begin(9600, SERIAL_8N1, 16, 17);  // RX=16, TX=17
+  // Inisialisasi komunikasi UART SIM800L
+  HardwareSerial* serialSim800 = new HardwareSerial(2);
+  serialSim800->begin(115200, SERIAL_8N1, SIM800_RX, SIM800_TX);
 
-  sim800l = new SIM800L((Stream *)&sim800Serial, SIM800_RST_PIN, 200, 512, &Serial);
-  setupModule();
-}
+  // Inisialisasi SIM800L library
+  sim800l = new SIM800L((Stream*)serialSim800, SIM800_RST, 200, 512, &Serial);
 
-void loop() {
-  Serial.println("🔁 Connecting GPRS...");
-
-  bool connected = false;
-  for (uint8_t i = 0; i < 5 && !connected; i++) {
-    delay(1000);
-    connected = sim800l->connectGPRS();
-  }
-
-  if (!connected) {
-    Serial.println("❌ Gagal GPRS. Reset module...");
-    sim800l->reset();
-    setupModule();
-    return;
-  }
-
-  Serial.println("✅ GPRS Connected. IP: " + sim800l->getIP());
-
-  Serial.println("🌐 Kirim HTTP GET...");
-  uint16_t rc = sim800l->doGet(URL, 10000);
-  if (rc == 200) {
-    Serial.println("✅ Sukses kirim!");
-    Serial.println(sim800l->getDataReceived());
-  } else {
-    Serial.print("❌ Gagal kirim. Error: ");
-    Serial.println(rc);
-  }
-
-  sim800l->disconnectGPRS();
-  delay(60000);  // kirim tiap 1 menit
-}
-
-void setupModule() {
+  // Tunggu hingga module siap
   while (!sim800l->isReady()) {
-    Serial.println("Menunggu module siap...");
+    Serial.println("⏳ Menunggu module siap...");
     delay(1000);
   }
 
+  // Cek sinyal
   while (sim800l->getSignal() <= 0) {
     Serial.println("📶 Menunggu sinyal...");
     delay(1000);
   }
 
-  while (sim800l->getRegistrationStatus() != REGISTERED_HOME &&
-         sim800l->getRegistrationStatus() != REGISTERED_ROAMING) {
+  // Registrasi jaringan
+  while (sim800l->getRegistrationStatus() != REGISTERED_HOME && sim800l->getRegistrationStatus() != REGISTERED_ROAMING) {
     Serial.println("📡 Registrasi jaringan...");
     delay(1000);
   }
 
-  bool gprs = sim800l->setupGPRS(APN);
-  while (!gprs) {
-    Serial.println("❌ Gagal setup GPRS, coba lagi...");
+  // Setup GPRS
+  bool success = sim800l->setupGPRS(APN);
+  while (!success) {
+    Serial.println("❌ Gagal setup GPRS. Coba ulang...");
     delay(2000);
-    gprs = sim800l->setupGPRS(APN);
+    success = sim800l->setupGPRS(APN);
+  }
+  Serial.println("✅ GPRS siap.");
+
+  // Connect GPRS
+  bool connected = sim800l->connectGPRS();
+  while (!connected) {
+    Serial.println("🔁 Koneksi ke GPRS...");
+    delay(1000);
+    connected = sim800l->connectGPRS();
   }
 
-  Serial.println("✅ GPRS Siap!");
+  String ip = sim800l->getIP();
+  Serial.println("✅ IP GPRS: " + ip);
+
+  // Kirim HTTP GET ke server
+  String bpm = "88";
+  String lat = "-6.20";
+  String lon = "106.80";
+
+  String fullUrl = String(HOST) + PATH + "?bpm=" + bpm + "&lat=" + lat + "&lon=" + lon;
+  Serial.println("🌐 Kirim HTTP GET...");
+  Serial.println("Full URL: " + fullUrl);
+
+  int status = sim800l->doGet(fullUrl.c_str(), 10000);
+  if (status == 200) {
+    Serial.println("✅ Data terkirim. Response:");
+    Serial.println(sim800l->getDataReceived());
+  } else {
+    Serial.print("❌ Gagal. HTTP code: ");
+    Serial.println(status);
+  }
+
+  sim800l->disconnectGPRS();
+}
+
+void loop() {
+  // Kosong (hanya kirim sekali di setup)
 }
