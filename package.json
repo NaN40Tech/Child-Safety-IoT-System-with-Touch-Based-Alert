@@ -1,7 +1,7 @@
 {
   "name": "child-safety-node-red",
   "version": "1.0.0",
-  "description": "Child Safety IoT Node-RED Project with Telegram Integration",
+  "description": "Child Safety IoT Node-RED Project with Telegram and Firebase",
   "main": "index.js",
   "scripts": {
     "start": "node-red"
@@ -9,11 +9,11 @@
   "dependencies": {
     "node-red": "^3.1.0",
     "node-red-contrib-telegrambot": "^10.0.2",
-    "node-red-node-firebase": "^0.1.4"
+    "node-red-contrib-firebase": "^0.1.2"
   },
   "engines": {
     "node": ">=14.0.0"
   },
   "author": "Nabila",
-  "license": "ISC"
+  "license": "MIT"
 }
