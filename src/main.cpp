@@ -1,92 +1,139 @@
-// ESP32 + SIM800L EVB V2
-// Kirim data ke Telegram via Replit menggunakan SIM800L HTTP connector
+#define TINY_GSM_MODEM_SIM800
+#define TINY_GSM_RX_BUFFER 256
 
-#include <Arduino.h>
-#include <SIM800L.h>  // Library: ostaquet/SIM800L HTTP connector
+#include <TinyGPS++.h>
+#include <TinyGsmClient.h> 
+#include <ArduinoHttpClient.h> 
 
-// Konfigurasi pin SIM800L
-#define SIM800_TX 17
-#define SIM800_RX 16
-#define SIM800_RST 5     // RST disambungkan ke D5 (GPIO5)
+const char FIREBASE_HOST[]  = "tracking-anak-07-default-rtdb.firebaseio.com";
+const String FIREBASE_AUTH  = "DWOEgSzSkcgyL7dN7pp6PtNxEGRaHZQ4TtFSKbZT";
+const String FIREBASE_PATH  = "TrackingAnak";
+const int SSL_PORT          = 443;
 
-// Konfigurasi jaringan dan endpoint
-const char APN[] = "internet";  // APN untuk Telkomsel/By.U
-const char* HOST = "https://ee1e468f-e4af-41fa-a6c3-ed757d70d861-00-36vp7ciz3ewao.pike.replit.dev:3000";
-const char* PATH = "/iot";     // endpoint di server
+char apn[]  = "internet"; 
+char user[] = "";
+char pass[] = "";
 
-SIM800L* sim800l;
+#define rxPin 16
+#define txPin 17
+HardwareSerial sim800(1);
+TinyGsm modem(sim800);
 
+#define RXD2 19
+#define TXD2 18
+HardwareSerial neogps(2);
+TinyGPSPlus gps;
+
+TinyGsmClientSecure gsm_client_secure_modem(modem, 0);
+HttpClient http_client = HttpClient(gsm_client_secure_modem, FIREBASE_HOST, SSL_PORT);
+
+unsigned long previousMillis = 0;
+const unsigned long interval = 30000; 
+
+// Data GPS global
+String latitude = "0.0";
+String longitude = "0.0";
+String bpm = "98"; 
+
+//**************************************************************************************************
 void setup() {
-  Serial.begin(115200);
-  delay(2000);
-  Serial.println("=== ESP32 + SIM800L EVB (dengan RST di D5) ===");
+  Serial.begin(9600);
+  Serial.println("ESP32 serial initialize");
+  
+  sim800.begin(9600, SERIAL_8N1, rxPin, txPin);
+  Serial.println("SIM800L serial initialize");
 
-  // Inisialisasi komunikasi UART SIM800L
-  HardwareSerial* serialSim800 = new HardwareSerial(2);
-  serialSim800->begin(115200, SERIAL_8N1, SIM800_RX, SIM800_TX);
+  neogps.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  Serial.println("NeoGPS serial initialize");
 
-  // Inisialisasi SIM800L library
-  sim800l = new SIM800L((Stream*)serialSim800, SIM800_RST, 200, 512, &Serial);
-
-  // Tunggu hingga module siap
-  while (!sim800l->isReady()) {
-    Serial.println("⏳ Menunggu module siap...");
-    delay(1000);
-  }
-
-  // Cek sinyal
-  while (sim800l->getSignal() <= 0) {
-    Serial.println("📶 Menunggu sinyal...");
-    delay(1000);
-  }
-
-  // Registrasi jaringan
-  while (sim800l->getRegistrationStatus() != REGISTERED_HOME && sim800l->getRegistrationStatus() != REGISTERED_ROAMING) {
-    Serial.println("📡 Registrasi jaringan...");
-    delay(1000);
-  }
-
-  // Setup GPRS
-  bool success = sim800l->setupGPRS(APN);
-  while (!success) {
-    Serial.println("❌ Gagal setup GPRS. Coba ulang...");
-    delay(2000);
-    success = sim800l->setupGPRS(APN);
-  }
-  Serial.println("✅ GPRS siap.");
-
-  // Connect GPRS
-  bool connected = sim800l->connectGPRS();
-  while (!connected) {
-    Serial.println("🔁 Koneksi ke GPRS...");
-    delay(1000);
-    connected = sim800l->connectGPRS();
-  }
-
-  String ip = sim800l->getIP();
-  Serial.println("✅ IP GPRS: " + ip);
-
-  // Kirim HTTP GET ke server
-  String bpm = "88";
-  String lat = "-6.20";
-  String lon = "106.80";
-
-  String fullUrl = String(HOST) + PATH + "?bpm=" + bpm + "&lat=" + lat + "&lon=" + lon;
-  Serial.println("🌐 Kirim HTTP GET...");
-  Serial.println("Full URL: " + fullUrl);
-
-  int status = sim800l->doGet(fullUrl.c_str(), 10000);
-  if (status == 200) {
-    Serial.println("✅ Data terkirim. Response:");
-    Serial.println(sim800l->getDataReceived());
-  } else {
-    Serial.print("❌ Gagal. HTTP code: ");
-    Serial.println(status);
-  }
-
-  sim800l->disconnectGPRS();
+  delay(3000);
+  
+  Serial.println("Initializing modem...");
+  modem.restart();
+  String modemInfo = modem.getModemInfo();
+  Serial.print("Modem: ");
+  Serial.println(modemInfo);
+  
+  http_client.setHttpResponseTimeout(90 * 1000);
 }
 
 void loop() {
-  // Kosong (hanya kirim sekali di setup)
+  // Pastikan GPRS tersambung
+  if (!modem.isGprsConnected()) {
+    Serial.print(F("Connecting to "));
+    Serial.print(apn);
+    if (!modem.gprsConnect(apn, user, pass)) {
+      Serial.println(" fail");
+      delay(1000);
+      return;
+    }
+    Serial.println(" OK");
+  }
+
+  // Baca data GPS terus-menerus di background
+  bacaGPS();
+
+  // Kirim ke Firebase setiap 30 detik
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    kirimDataFirebase();
+  }
+}
+
+void bacaGPS() {
+  while (neogps.available()) {
+    gps.encode(neogps.read());
+  }
+
+  if (gps.location.isValid()) {
+    latitude = String(gps.location.lat(), 6);
+    longitude = String(gps.location.lng(), 6);
+  }
+
+  Serial.print("Latitude= ");
+  Serial.print(latitude);
+  Serial.print(" Longitude= ");
+  Serial.println(longitude);
+}
+
+void kirimDataFirebase() {
+  if (!http_client.connected()) {
+    http_client.connect(FIREBASE_HOST, SSL_PORT);
+  }
+
+  String gpsData = "{";
+  gpsData += "\"latitude\":" + latitude + ",";
+  gpsData += "\"longitude\":" + longitude + ",";
+  gpsData += "\"bpm\":" + bpm;
+  gpsData += "}";
+
+  PostToFirebase("PATCH", FIREBASE_PATH, gpsData, &http_client);
+}
+
+void PostToFirebase(const char* method, const String & path , const String & data, HttpClient* http) {
+  String url = "/";
+  url += path + ".json";
+  url += "?auth=" + FIREBASE_AUTH;
+
+  Serial.print("POST: ");
+  Serial.println(url);
+  Serial.print("Data: ");
+  Serial.println(data);
+
+  String contentType = "application/json";
+  http->put(url, contentType, data);
+
+  int statusCode = http->responseStatusCode();
+  String response = http->responseBody();
+
+  Serial.print("Status code: ");
+  Serial.println(statusCode);
+  Serial.print("Response: ");
+  Serial.println(response);
+
+  if (!http->connected()) {
+    Serial.println("HTTP POST disconnected");
+    http->stop();
+  }
 }
