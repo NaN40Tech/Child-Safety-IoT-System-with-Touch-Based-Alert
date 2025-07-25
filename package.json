@@ -1,18 +1,19 @@
 {
-  "name": "child-safety-iot-system",
+  "name": "child-safety-node-red",
   "version": "1.0.0",
-  "description": "Node-RED deploy for child safety tracking",
-  "main": "server.js",
+  "description": "Child Safety IoT Node-RED Project with Telegram Integration",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=14"
+    "start": "node-red"
   },
   "dependencies": {
     "node-red": "^3.1.0",
-    "node-red-node-telegrambot": "1.8.0",
-    "node-fetch": "^2.6.7",
-    "node-red-contrib-firebase": "^0.1.0"
-  }
+    "node-red-contrib-telegrambot": "^10.0.2",
+    "node-red-node-firebase": "^0.1.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "Nabila",
+  "license": "ISC"
 }
