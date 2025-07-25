@@ -1,106 +1,87 @@
 [
-    {
-        "id": "f1c6d6b3f42ea1e6",
-        "type": "inject",
-        "z": "5e21946ae579c9e2",
-        "name": "Every 2s",
-        "props": [],
-        "repeat": "2",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "1",
-        "topic": "",
-        "x": 150,
-        "y": 220,
-        "wires": [
-            [
-                "b7dc25f90e2a6fd7"
-            ]
-        ]
-    },
-    {
-        "id": "b7dc25f90e2a6fd7",
-        "type": "http request",
-        "z": "5e21946ae579c9e2",
-        "name": "Get Firebase Data",
-        "method": "GET",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "https://tracking-anak-07-default-rtdb.asia-southeast1.firebasedatabase.app/TrackingAnak.json",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 350,
-        "y": 220,
-        "wires": [
-            [
-                "5d0e8fc2efed1342"
-            ]
-        ]
-    },
-    {
-        "id": "5d0e8fc2efed1342",
-        "type": "function",
-        "z": "5e21946ae579c9e2",
-        "name": "Detect Change & Format",
-        "func": "// Ambil data sebelumnya dari context\nlet lastData = context.get(\"lastData\") || {};\nlet newData = msg.payload;\n\n// Cek apakah ada perubahan data\nif (JSON.stringify(newData) !== JSON.stringify(lastData)) {\n    context.set(\"lastData\", newData); // Simpan data terbaru\n\n    let pesan = `🚨 PERINGATAN BAHAYA!\n❤️ BPM: ${newData.bpm}\n📍 Lokasi: https://maps.google.com/?q=${newData.latitude},${newData.longitude}`;\n\n    msg.payload = {\n        chatId: \"1345966853\",\n        type: \"message\",\n        content: pesan\n    };\n    return msg;\n} else {\n    return null; // Kalau gak ada perubahan\n}\n",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 590,
-        "y": 220,
-        "wires": [
-            [
-                "356fd2a2e56b6d02"
-            ]
-        ]
-    },
-    {
-        "id": "356fd2a2e56b6d02",
-        "type": "telegram sender",
-        "z": "5e21946ae579c9e2",
-        "name": "Send to Telegram",
-        "bot": "7e908c8074672df4",
-        "haserroroutput": false,
-        "outputs": 1,
-        "x": 820,
-        "y": 220,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "7e908c8074672df4",
-        "type": "telegram bot",
-        "botname": "AqilaBot",
-        "usernames": "",
-        "chatids": "1345966853",
-        "baseapiurl": "",
-        "testenvironment": false,
-        "updatemode": "polling",
-        "pollinterval": 300,
-        "usesocks": false,
-        "sockshost": "",
-        "socksprotocol": "socks5",
-        "socksport": 6667,
-        "socksusername": "anonymous",
-        "sockspassword": "",
-        "bothost": "",
-        "botpath": "",
-        "localbothost": "0.0.0.0",
-        "localbotport": 8443,
-        "publicbotport": 8443,
-        "privatekey": "",
-        "certificate": "",
-        "useselfsignedcertificate": false,
-        "sslterminated": false,
-        "verboselogging": false
-    }
+  {
+    "id": "inject_every_2s",
+    "type": "inject",
+    "z": "flow_utama",
+    "name": "Every 2s",
+    "props": [],
+    "repeat": "2",
+    "once": true,
+    "onceDelay": "1",
+    "x": 150,
+    "y": 220,
+    "wires": [
+      ["inject_firebase_url"]
+    ]
+  },
+  {
+    "id": "inject_firebase_url",
+    "type": "function",
+    "z": "flow_utama",
+    "name": "Set Firebase URL",
+    "func": "msg.url = global.get(\"firebaseUrl\");\nreturn msg;",
+    "outputs": 1,
+    "x": 350,
+    "y": 220,
+    "wires": [
+      ["http_request_firebase"]
+    ]
+  },
+  {
+    "id": "http_request_firebase",
+    "type": "http request",
+    "z": "flow_utama",
+    "name": "Get Firebase Data",
+    "method": "GET",
+    "ret": "obj",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "authType": "",
+    "x": 550,
+    "y": 220,
+    "wires": [
+      ["detect_change"]
+    ]
+  },
+  {
+    "id": "detect_change",
+    "type": "function",
+    "z": "flow_utama",
+    "name": "Detect Change & Format",
+    "func": "let lastData = context.get(\"lastData\") || {};\nlet newData = msg.payload;\n\nif (JSON.stringify(newData) !== JSON.stringify(lastData)) {\n    context.set(\"lastData\", newData);\n\n    let chatId = global.get(\"chatId\");\n    let pesan = `🚨 PERINGATAN BAHAYA!\\n❤️ BPM: ${newData.bpm}\\n📍 Lokasi: https://maps.google.com/?q=${newData.latitude},${newData.longitude}`;\n\n    msg.payload = {\n        chatId: chatId,\n        type: \"message\",\n        content: pesan\n    };\n    return msg;\n} else {\n    return null;\n}",
+    "outputs": 1,
+    "x": 790,
+    "y": 220,
+    "wires": [
+      ["send_to_telegram"]
+    ]
+  },
+  {
+    "id": "send_to_telegram",
+    "type": "telegram sender",
+    "z": "flow_utama",
+    "name": "Send to Telegram",
+    "bot": "bot_config",
+    "haserroroutput": false,
+    "outputs": 1,
+    "x": 1050,
+    "y": 220,
+    "wires": [[]]
+  },
+  {
+    "id": "bot_config",
+    "type": "telegram bot",
+    "botname": "AqilaBot",
+    "chatids": "1345966853",
+    "baseapiurl": "",
+    "updatemode": "polling",
+    "pollinterval": 300,
+    "usesocks": false,
+    "localbothost": "0.0.0.0",
+    "localbotport": 8443,
+    "publicbotport": 8443,
+    "verboselogging": false
+  }
 ]
