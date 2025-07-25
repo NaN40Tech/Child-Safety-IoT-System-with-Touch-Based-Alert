@@ -1,50 +1,178 @@
-# Child Safety IoT System with Touch-Based Alert
+# 👶📍 Child Safety IoT System with Touch-Based Alert
 
-Proyek ini merupakan sistem keamanan anak berbasis **Internet of Things (IoT)** yang memungkinkan anak untuk mengirim sinyal darurat melalui sentuhan. Dengan menekan sensor sentuh sebanyak **tiga kali berturut-turut**, sistem akan secara otomatis mengirimkan **lokasi GPS dan detak jantung (BPM)** ke **Telegram**, serta mengaktifkan **buzzer** sebagai tanda lokal bahwa sinyal telah dikirim.
+Sistem ini adalah **IoT berbasis ESP32** untuk menjaga keamanan anak. Dengan hanya **menyentuh sensor sebanyak 3 kali**, anak dapat mengirimkan sinyal darurat berupa:
 
----
+* 📍 **Lokasi GPS**
+* ❤️ **Detak jantung (BPM)**
+* 📲 Terkirim otomatis ke **Telegram orang tua**
 
-## 🔧 Komponen yang Digunakan
-
-- **ESP32** – Mikrokontroler utama
-- **GPS Module** – Untuk pelacakan lokasi anak secara real-time
-- **SIM800L EVB** – Modul GSM untuk mengirim data ke Telegram
-- **MAX30102** – Sensor detak jantung (BPM)
-- **Sensor Sentuh** – Sebagai tombol darurat
-- **Buzzer** – Penanda sinyal darurat berhasil dikirim
-- **Provider** – By.U / Telkomsel
+Sinyal dikirim via **SIM800L** ke **Firebase Realtime Database**, lalu dipantau oleh **Node-RED**, dan akhirnya diteruskan ke Telegram.
 
 ---
 
-## ⚙️ Cara Kerja
+## 🧹 Komponen Hardware
 
-1. Anak menekan sensor sentuh sebanyak **3 kali terus menerus**.
-2. ESP32 membaca:
-   - **Detak jantung** dari sensor MAX30102.
-   - **Lokasi GPS** dari modul GPS.
-3. Data dikirim ke **Telegram** menggunakan modul GSM SIM800L.
-4. **Buzzer menyala** untuk menandakan bahwa sinyal telah berhasil dikirim.
+| Komponen          | Fungsi                         |
+| ----------------- | ------------------------------ |
+| **ESP32**         | Mikrokontroler utama           |
+| **SIM800L**       | Modul GSM untuk upload data    |
+| **GPS NEO-6MV2**  | Pelacakan lokasi               |
+| **MAX30102**      | Sensor detak jantung           |
+| **Sensor Sentuh** | Trigger sinyal darurat         |
+| **Buzzer**        | Penanda sinyal darurat dikirim |
+| **Provider**      | Kartu SIM By.U / Telkomsel     |
 
 ---
 
-## 🚀 Instalasi & Setup
+## 🔌 Wiring Pin ESP32
 
-### 1. Software & Library yang Dibutuhkan (Arduino IDE)
-- `TinyGSM`
-- `MAX3010x`
-- `SoftwareSerial`
-- `Adafruit_GPS` *(jika pakai GPS TTL)*
-- `ArduinoJson`
-- `WiFi.h` *(bawaan ESP32)*
+### Sensor Sentuh
 
-### 2. Hardware Setup
-- Hubungkan sensor-sensor ke ESP32 sesuai dengan pin yang ditentukan dalam kode.
-- Gunakan power supply eksternal 5V untuk SIM800L agar stabil.
-- Pastikan kartu SIM (By.U / Telkomsel) memiliki pulsa atau kuota internet aktif.
+```
+VCC  → 3.3V  
+GND  → GND  
+SIG  → GPIO 34  
+```
 
-### 3. Konfigurasi
-Edit file `config.h` atau bagian konfigurasi di sketch:
-```cpp
-#define BOT_TOKEN "TOKEN_BOT_TELEGRAM_ANDA"
-#define CHAT_ID "CHAT_ID_ORANG_TUA"
-#define APN "internet" // untuk Telkomsel / By.U
+### Buzzer
+
+```
+VCC  → GPIO 4  
+GND  → GND  
+```
+
+### MAX30102
+
+```
+VCC  → 3.3V  
+GND  → GND  
+SDA  → GPIO 21  
+SCL  → GPIO 22  
+```
+
+### GPS NEO-6MV2
+
+```
+VCC  → 3.3V  
+RX   → GPIO 19  
+TX   → GPIO 18  
+GND  → GND  
+```
+
+### SIM800L
+
+```
+VCC  → 4.2V (langsung dari Baterai 18650)  
+RX   → GPIO 16  
+```
+
+---
+
+## ↺ Alur Kerja Sistem
+
+1. Anak menekan **sensor sentuh sebanyak 3 kali**.
+2. ESP32:
+   * Membaca **BPM** dari MAX30102
+   * Mengambil **koordinat lokasi** dari GPS
+   * Mengirim data ke **Firebase** via SIM800L
+3. **Node-RED** yang di-host di **Railway** membaca data dari Firebase
+4. Node-RED mengirim **notifikasi Telegram otomatis** ke orang tua
+5. **Buzzer menyala** di sisi anak sebagai notifikasi lokal
+
+---
+
+## ⚙️ Instalasi (Arduino IDE)
+
+### 📦 Library yang Dibutuhkan
+
+* `TinyGSM` → komunikasi GSM
+* `MAX3010x` → detak jantung
+* `SoftwareSerial`
+* `ArduinoJson`
+* `Adafruit_GPS`
+
+> 💡 **Tips:** Gunakan Board Manager ESP32 terbaru di Arduino IDE
+
+---
+
+## ⚙️ Contoh Format Data ke Firebase
+
+```json
+{
+  "bpm": 102,
+  "latitude": -6.200000,
+  "longitude": 106.816666,
+  "timestamp": "2025-07-25T17:00:00Z"
+}
+```
+
+---
+
+## 🧐 Node-RED Workflow
+
+1. Node Firebase membaca path `TrackingAnak`
+2. Saat data baru masuk:
+
+   * Ambil BPM + koordinat
+   * Format pesan Telegram
+   * Kirim via Node `telegram sender`
+
+### 🔐 Environment di Railway
+
+Masukkan environment variables di **Railway ➔ Variables**:
+
+```env
+TELEGRAM_TOKEN=xxxxxxxx:xxxxxxxxxxxxxxxxxxxx
+CHAT_ID=1234567890
+FIREBASE_URL=https://your-project-id.firebaseio.com/TrackingAnak.json
+```
+
+---
+
+## 🚀 Hosting Node-RED di Railway (Tanpa CMD!)
+
+### 📁 Struktur Folder
+
+```
+📁 my-node-red/
+🔼️ server.js
+🔼️ package.json
+🔼️ .env (JANGAN DI PUSH)
+🔼️ flows.json
+🔼️ flows_cred.json
+```
+
+### 📦 Contoh package.json
+
+```json
+{
+  "name": "child-safety-iot-nodered",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "node-red": "^3.1.0",
+    "node-red-node-telegrambot": "^1.7.0",
+    "node-red-contrib-firebase": "^0.1.4"
+  }
+}
+```
+
+### ▶️ Deploy Steps:
+
+1. Buat akun di [Railway](https://railway.app)
+2. Hubungkan ke GitHub repo-mu
+3. Railway akan auto-build & deploy
+4. Akses Node-RED via link public Railway
+
+---
+
+## 📬 Contoh Pesan Telegram
+
+```
+🚨 PERINGATAN DARURAT!
+❤️ BPM: 102
+📍 Lokasi: https://maps.google.com/?q=-6.200000,106.816666
+```
