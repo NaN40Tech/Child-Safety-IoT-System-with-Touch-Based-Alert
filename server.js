@@ -1,9 +1,16 @@
+require("dotenv").config(); // Tambahkan ini di paling atas
+
 const http = require("http");
 const express = require("express");
 const RED = require("node-red");
 
 const app = express();
 const server = http.createServer(app);
+
+// Redirect root ke Node-RED UI
+app.get("/", (req, res) => {
+  res.redirect("/red");
+});
 
 // Konfigurasi dasar
 const settings = {
